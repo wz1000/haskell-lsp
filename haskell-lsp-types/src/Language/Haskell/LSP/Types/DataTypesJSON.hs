@@ -24,7 +24,8 @@ import           Data.Text                                  (Text)
 import qualified Data.Text                                  as T
 import           Language.Haskell.LSP.Types.ClientCapabilities
 import           Language.Haskell.LSP.Types.CodeAction
-import           Language.Haskell.LSP.Types.Command
+import           Language.Haskell.LSP.Types.CodeLens
+import           Language.Haskell.LSP.Types.Completion
 import           Language.Haskell.LSP.Types.Constants
 import           Language.Haskell.LSP.Types.Diagnostic
 import           Language.Haskell.LSP.Types.DocumentFilter
@@ -35,6 +36,7 @@ import           Language.Haskell.LSP.Types.Method
 import           Language.Haskell.LSP.Types.Progress
 import           Language.Haskell.LSP.Types.TextDocument
 import           Language.Haskell.LSP.Types.Uri
+import           Language.Haskell.LSP.Types.Utils
 import           Language.Haskell.LSP.Types.WorkspaceEdit
 import           Language.Haskell.LSP.Types.WorkspaceFolders
 
@@ -159,246 +161,6 @@ data InitializeError =
 deriveJSON lspOptions ''InitializeError
 
 -- ---------------------------------------------------------------------
-{-
-The server can signal the following capabilities:
-
-/**
- * Defines how the host (editor) should sync document changes to the language server.
- */
-enum TextDocumentSyncKind {
-    /**
-     * Documents should not be synced at all.
-     */
-    None = 0,
-    /**
-     * Documents are synced by always sending the full content of the document.
-     */
-    Full = 1,
-    /**
-     * Documents are synced by sending the full content on open. After that only incremental
-     * updates to the document are sent.
-     */
-    Incremental = 2
-}
--}
-
--- ^ Note: Omitting this parameter from the capabilities is effectively a fourth
--- state, where DidSave events are generated without sending document contents.
-data TextDocumentSyncKind = TdSyncNone
-                          | TdSyncFull
-                          | TdSyncIncremental
-       deriving (Read,Eq,Show)
-
-instance A.ToJSON TextDocumentSyncKind where
-  toJSON TdSyncNone        = A.Number 0
-  toJSON TdSyncFull        = A.Number 1
-  toJSON TdSyncIncremental = A.Number 2
-
-instance A.FromJSON TextDocumentSyncKind where
-  parseJSON (A.Number 0) = pure TdSyncNone
-  parseJSON (A.Number 1) = pure TdSyncFull
-  parseJSON (A.Number 2) = pure TdSyncIncremental
-  parseJSON _            = mempty
-
--- ---------------------------------------------------------------------
-{-
-/**
- * Completion options.
- */
-interface CompletionOptions {
-    /**
-     * The server provides support to resolve additional information for a completion item.
-     */
-    resolveProvider?: boolean;
-
-    /**
-     * The characters that trigger completion automatically.
-     */
-    triggerCharacters?: string[];
-
-    /**
-     * The list of all possible characters that commit a completion. This field can be used
-     * if clients don't support individual commmit characters per completion item. See
-     * `ClientCapabilities.textDocument.completion.completionItem.commitCharactersSupport`.
-     *
-     * If a server provides both `allCommitCharacters` and commit characters on an individual
-     * completion item the once on the completion item win.
-     *
-     * @since 3.2.0
-     */
-    allCommitCharacters?: string[];
-}
--}
-
-data CompletionOptions =
-  CompletionOptions
-    { _resolveProvider     :: Maybe Bool
-    -- | The characters that trigger completion automatically.
-    , _triggerCharacters   :: Maybe [String]
-    -- | The list of all possible characters that commit a completion. This field can be used
-    -- if clients don't support individual commmit characters per completion item. See
-    -- `_commitCharactersSupport`.
-    -- Since LSP 3.2.0
-    -- @since 0.18.0.0
-    , _allCommitCharacters :: Maybe [String]
-    } deriving (Read,Show,Eq)
-
-deriveJSON lspOptions {omitNothingFields = True } ''CompletionOptions
-
--- ---------------------------------------------------------------------
-{-
-/**
- * Signature help options.
- */
-interface SignatureHelpOptions {
-    /**
-     * The characters that trigger signature help automatically.
-     */
-    triggerCharacters?: string[];
-    /**
-     * List of characters that re-trigger signature help.
-     *
-     * These trigger characters are only active when signature help is already showing. All trigger characters
-     * are also counted as re-trigger characters.
-     *
-     * @since 3.15.0
-     */
--}
-
-data SignatureHelpOptions =
-  SignatureHelpOptions
-    { -- | The characters that trigger signature help automatically.
-      _triggerCharacters   :: Maybe [String]
-
-    -- | List of characters that re-trigger signature help.
-    -- These trigger characters are only active when signature help is already showing. All trigger characters
-    -- are also counted as re-trigger characters.
-    --
-    -- Since LSP 3.15.0
-    -- @since 0.18.0.0
-    , _retriggerCharacters :: Maybe [String]
-    } deriving (Read,Show,Eq)
-
-deriveJSON lspOptions ''SignatureHelpOptions
-
--- ---------------------------------------------------------------------
-{-
-/**
- * Code Lens options.
- */
-interface CodeLensOptions {
-    /**
-     * Code lens has a resolve provider as well.
-     */
-    resolveProvider?: boolean;
-}
--}
-
-data CodeLensOptions =
-  CodeLensOptions
-    { _resolveProvider :: Maybe Bool
-    } deriving (Read,Show,Eq)
-
-deriveJSON lspOptions ''CodeLensOptions
-
--- ---------------------------------------------------------------------
-{-
-/**
- * Code Action options.
- */
-export interface CodeActionOptions {
-    /**
-     * CodeActionKinds that this server may return.
-     *
-     * The list of kinds may be generic, such as `CodeActionKind.Refactor`, or the server
-     * may list out every specific kind they provide.
-     */
-    codeActionKinds?: CodeActionKind[];
-}
--}
-
-data CodeActionOptions =
-  CodeActionOptionsStatic Bool
-  | CodeActionOptions
-    { _codeActionKinds :: Maybe [CodeActionKind]
-    } deriving (Read,Show,Eq)
-
-deriveJSON (lspOptions { sumEncoding = A.UntaggedValue }) ''CodeActionOptions
-
--- ---------------------------------------------------------------------
-{-
-/**
- * Format document on type options
- */
-interface DocumentOnTypeFormattingOptions {
-    /**
-     * A character on which formatting should be triggered, like `}`.
-     */
-    firstTriggerCharacter: string;
-    /**
-     * More trigger characters.
-     */
-    moreTriggerCharacter?: string[]
-}
--}
-data DocumentOnTypeFormattingOptions =
-  DocumentOnTypeFormattingOptions
-    { _firstTriggerCharacter :: Text
-    , _moreTriggerCharacter  :: Maybe [Text]
-    } deriving (Read,Show,Eq)
-
-deriveJSON lspOptions ''DocumentOnTypeFormattingOptions
-
--- ---------------------------------------------------------------------
-{-
-New in 3.0
-----------
-
-/**
- * Document link options
- */
-export interface DocumentLinkOptions {
-        /**
-         * Document links have a resolve provider as well.
-         */
-        resolveProvider?: boolean;
-}
--}
-
-data DocumentLinkOptions =
-  DocumentLinkOptions
-    { -- | Document links have a resolve provider as well.
-      _resolveProvider :: Maybe Bool
-    } deriving (Show, Read, Eq)
-
-deriveJSON lspOptions ''DocumentLinkOptions
-
--- ---------------------------------------------------------------------
-{-
-New in 3.12
-----------
-
-/**
- * Rename options
- */
-export interface RenameOptions {
-        /**
-         * Renames should be checked and tested before being executed.
-         */
-        prepareProvider?: boolean;
-}
--}
-
-data RenameOptions =
-  RenameOptionsStatic Bool
-  | RenameOptions
-    { -- | Renames should be checked and tested before being executed.
-      _prepareProvider :: Maybe Bool
-    } deriving (Show, Read, Eq)
-
-deriveJSON lspOptions { sumEncoding = A.UntaggedValue } ''RenameOptions
-
--- ---------------------------------------------------------------------
 
 {-
 New in 3.0
@@ -424,375 +186,12 @@ data ExecuteCommandOptions =
 deriveJSON lspOptions ''ExecuteCommandOptions
 
 -- ---------------------------------------------------------------------
-{-
-New in 3.0
-----------
-/**
- * Save options.
- */
-export interface SaveOptions {
-        /**
-         * The client is supposed to include the content on save.
-         */
-        includeText?: boolean;
-}
--}
-data SaveOptions =
-  SaveOptions
-    { -- |The client is supposed to include the content on save.
-      _includeText :: Maybe Bool
-    } deriving (Show, Read, Eq)
-
-deriveJSON lspOptions ''SaveOptions
-
--- ---------------------------------------------------------------------
-{-
-New in 3.0
-----------
-
-export interface TextDocumentSyncOptions {
-        /**
-         * Open and close notifications are sent to the server.
-         */
-        openClose?: boolean;
-        /**
-         * Change notificatins are sent to the server. See TextDocumentSyncKind.None, TextDocumentSyncKind.Full
-         * and TextDocumentSyncKindIncremental.
-         */
-        change?: number;
-        /**
-         * Will save notifications are sent to the server.
-         */
-        willSave?: boolean;
-        /**
-         * Will save wait until requests are sent to the server.
-         */
-        willSaveWaitUntil?: boolean;
-        /**
-         * Save notifications are sent to the server.
-         */
-        save?: SaveOptions;
-}
--}
-
-data TextDocumentSyncOptions =
-  TextDocumentSyncOptions
-    { -- | Open and close notifications are sent to the server.
-      _openClose         :: Maybe Bool
-
-      -- | Change notificatins are sent to the server. See
-      -- TextDocumentSyncKind.None, TextDocumentSyncKind.Full and
-      -- TextDocumentSyncKindIncremental.
-    , _change            :: Maybe TextDocumentSyncKind
-
-      -- | Will save notifications are sent to the server.
-    , _willSave          :: Maybe Bool
-
-      -- | Will save wait until requests are sent to the server.
-    , _willSaveWaitUntil :: Maybe Bool
-
-      -- | Save notifications are sent to the server.
-    , _save              :: Maybe SaveOptions
-    } deriving (Show, Read, Eq)
-
-deriveJSON lspOptions ''TextDocumentSyncOptions
-
--- ---------------------------------------------------------------------
-{-
-
-Extended in 3.0
----------------
-
-interface ServerCapabilities {
-        /**
-         * Defines how text documents are synced. Is either a detailed structure defining each notification or
-         * for backwards compatibility the TextDocumentSyncKind number. If omitted it defaults to `TextDocumentSyncKind.None`.
-         */
-        textDocumentSync?: TextDocumentSyncOptions | number;
-        /**
-         * The server provides hover support.
-         */
-        hoverProvider?: boolean;
-        /**
-         * The server provides completion support.
-         */
-        completionProvider?: CompletionOptions;
-        /**
-         * The server provides signature help support.
-         */
-        signatureHelpProvider?: SignatureHelpOptions;
-        /**
-         * The server provides goto definition support.
-         */
-        definitionProvider?: boolean;
-        /**
-         * The server provides Goto Type Definition support.
-         *
-         * Since 3.6.0
-         */
-        typeDefinitionProvider?: boolean | (TextDocumentRegistrationOptions & StaticRegistrationOptions);
-        /**
-         * The server provides Goto Implementation support.
-         *
-         * Since 3.6.0
-         */
-        implementationProvider?: boolean | (TextDocumentRegistrationOptions & StaticRegistrationOptions);
-        /**
-         * The server provides find references support.
-         */
-        referencesProvider?: boolean;
-        /**
-         * The server provides document highlight support.
-         */
-        documentHighlightProvider?: boolean;
-        /**
-         * The server provides document symbol support.
-         */
-        documentSymbolProvider?: boolean;
-        /**
-         * The server provides workspace symbol support.
-         */
-        workspaceSymbolProvider?: boolean;
-        /**
-         * The server provides code actions. The `CodeActionOptions` return type is only
-         * valid if the client signals code action literal support via the property
-         * `textDocument.codeAction.codeActionLiteralSupport`.
-         */
-        codeActionProvider?: boolean | CodeActionOptions;
-        /**
-         * The server provides code lens.
-         */
-        codeLensProvider?: CodeLensOptions;
-        /**
-         * The server provides document formatting.
-         */
-        documentFormattingProvider?: boolean;
-        /**
-         * The server provides document range formatting.
-         */
-        documentRangeFormattingProvider?: boolean;
-        /**
-         * The server provides document formatting on typing.
-         */
-        documentOnTypeFormattingProvider?: DocumentOnTypeFormattingOptions;
-        /**
-         * The server provides rename support.
-         */
-        renameProvider?: boolean;
-        /**
-         * The server provides document link support.
-         */
-        documentLinkProvider?: DocumentLinkOptions;
-        /**
-         * The server provides color provider support.
-         *
-         * Since 3.6.0
-         */
-        colorProvider?: boolean | ColorProviderOptions | (ColorProviderOptions & TextDocumentRegistrationOptions & StaticRegistrationOptions);
-        /**
-         * The server provides folding provider support.
-         *
-         * Since 3.10.0
-         */
-        foldingRangeProvider?: boolean | FoldingRangeProviderOptions | (FoldingRangeProviderOptions & TextDocumentRegistrationOptions & StaticRegistrationOptions);
-        /**
-         * The server provides execute command support.
-         */
-        executeCommandProvider?: ExecuteCommandOptions;
-        /**
-         * Workspace specific server capabilities
-         */
-        workspace?: {
-                /**
-                 * The server supports workspace folder.
-                 *
-                 * Since 3.6.0
-                 */
-                workspaceFolders?: {
-                        /**
-                        * The server has support for workspace folders
-                        */
-                        supported?: boolean;
-                        /**
-                        * Whether the server wants to receive workspace folder
-                        * change notifications.
-                        *
-                        * If a strings is provided the string is treated as a ID
-                        * under which the notification is registered on the client
-                        * side. The ID can be used to unregister for these events
-                        * using the `client/unregisterCapability` request.
-                        */
-                        changeNotifications?: string | boolean;
-                }
-        }
-        /**
-         * Experimental server capabilities.
-         */
-        experimental?: any;
-}
--}
-
--- | Wrapper for TextDocumentSyncKind fallback.
-data TDS = TDSOptions TextDocumentSyncOptions
-         | TDSKind TextDocumentSyncKind
-    deriving (Show, Read, Eq)
-
-instance FromJSON TDS where
-    parseJSON x = TDSOptions <$> parseJSON x <|> TDSKind <$> parseJSON x
-
-instance ToJSON TDS where
-    toJSON (TDSOptions x) = toJSON x
-    toJSON (TDSKind x) = toJSON x
-
-data GotoOptions = GotoOptionsStatic Bool
-                 | GotoOptionsDynamic
-                    { -- | A document selector to identify the scope of the registration. If set to null
-                      -- the document selector provided on the client side will be used.
-                      _documentSelector :: Maybe DocumentSelector
-                      -- | The id used to register the request. The id can be used to deregister
-                      -- the request again. See also Registration#id.
-                    , _id :: Maybe Text
-                    }
-  deriving (Show, Read, Eq)
-
-deriveJSON lspOptions { sumEncoding = A.UntaggedValue } ''GotoOptions
--- TODO: Figure out how to make Lens', not Traversal', for sum types
---makeFieldsNoPrefix ''GotoOptions
-
-data ColorOptions = ColorOptionsStatic Bool
-                  | ColorOptionsDynamic
-                  | ColorOptionsDynamicDocument
-                    { -- | A document selector to identify the scope of the registration. If set to null
-                      -- the document selector provided on the client side will be used.
-                      _documentSelector :: Maybe DocumentSelector
-                      -- | The id used to register the request. The id can be used to deregister
-                      -- the request again. See also Registration#id.
-                    , _id :: Maybe Text
-                    }
-  deriving (Show, Read, Eq)
-
-deriveJSON lspOptions { sumEncoding = A.UntaggedValue } ''ColorOptions
--- makeFieldsNoPrefix ''ColorOptions
-
-data FoldingRangeOptions = FoldingRangeOptionsStatic Bool
-                         | FoldingRangeOptionsDynamic
-                         | FoldingRangeOptionsDynamicDocument
-                           { -- | A document selector to identify the scope of the registration. If set to null
-                             -- the document selector provided on the client side will be used.
-                             _documentSelector :: Maybe DocumentSelector
-                             -- | The id used to register the request. The id can be used to deregister
-                             -- the request again. See also Registration#id.
-                           , _id :: Maybe Text
-                           }
-  deriving (Show, Read, Eq)
-
-deriveJSON lspOptions { sumEncoding = A.UntaggedValue } ''FoldingRangeOptions
--- makeFieldsNoPrefix ''FoldingRangeOptions
-
-data WorkspaceFolderChangeNotifications = WorkspaceFolderChangeNotificationsString Text
-                                        | WorkspaceFolderChangeNotificationsBool Bool
-  deriving (Show, Read, Eq)
-
-deriveJSON lspOptions{ sumEncoding = A.UntaggedValue } ''WorkspaceFolderChangeNotifications
-
-data WorkspaceFolderOptions =
-  WorkspaceFolderOptions
-    { -- | The server has support for workspace folders
-      _supported :: Maybe Bool
-      -- | Whether the server wants to receive workspace folder
-      -- change notifications.
-      -- If a strings is provided the string is treated as a ID
-      -- under which the notification is registered on the client
-      -- side. The ID can be used to unregister for these events
-      -- using the `client/unregisterCapability` request.
-    , _changeNotifications :: Maybe WorkspaceFolderChangeNotifications
-    }
-  deriving (Show, Read, Eq)
-
-deriveJSON lspOptions ''WorkspaceFolderOptions
-
-data WorkspaceOptions =
-  WorkspaceOptions
-    { -- | The server supports workspace folder. Since LSP 3.6
-      --
-      -- @since 0.7.0.0
-      _workspaceFolders :: Maybe WorkspaceFolderOptions
-    }
-  deriving (Show, Read, Eq)
-
-deriveJSON lspOptions ''WorkspaceOptions
-
-data InitializeResponseCapabilitiesInner =
-  InitializeResponseCapabilitiesInner
-    { -- | Defines how text documents are synced. Is either a detailed structure
-      -- defining each notification or for backwards compatibility the
-      -- 'TextDocumentSyncKind' number.
-      -- If omitted it defaults to 'TdSyncNone'.
-      _textDocumentSync                 :: Maybe TDS
-      -- | The server provides hover support.
-    , _hoverProvider                    :: Maybe Bool
-      -- | The server provides completion support.
-    , _completionProvider               :: Maybe CompletionOptions
-      -- | The server provides signature help support.
-    , _signatureHelpProvider            :: Maybe SignatureHelpOptions
-      -- | The server provides goto definition support.
-    , _definitionProvider               :: Maybe Bool
-      -- | The server provides Goto Type Definition support. Since LSP 3.6
-      --
-      -- @since 0.7.0.0
-    , _typeDefinitionProvider           :: Maybe GotoOptions
-      -- | The server provides Goto Implementation support.
-      -- Since LSP 3.6
-      --
-      -- @since 0.7.0.0
-    , _implementationProvider           :: Maybe GotoOptions
-      -- | The server provides find references support.
-    , _referencesProvider               :: Maybe Bool
-      -- | The server provides document highlight support.
-    , _documentHighlightProvider        :: Maybe Bool
-      -- | The server provides document symbol support.
-    , _documentSymbolProvider           :: Maybe Bool
-      -- | The server provides workspace symbol support.
-    , _workspaceSymbolProvider          :: Maybe Bool
-      -- | The server provides code actions.
-    , _codeActionProvider               :: Maybe CodeActionOptions
-      -- | The server provides code lens.
-    , _codeLensProvider                 :: Maybe CodeLensOptions
-      -- | The server provides document formatting.
-    , _documentFormattingProvider       :: Maybe Bool
-      -- | The server provides document range formatting.
-    , _documentRangeFormattingProvider  :: Maybe Bool
-      -- | The server provides document formatting on typing.
-    , _documentOnTypeFormattingProvider :: Maybe DocumentOnTypeFormattingOptions
-      -- | The server provides rename support.
-    , _renameProvider                   :: Maybe RenameOptions
-      -- | The server provides document link support.
-    , _documentLinkProvider             :: Maybe DocumentLinkOptions
-      -- | The server provides color provider support. Since LSP 3.6
-      --
-      -- @since 0.7.0.0
-    , _colorProvider                    :: Maybe ColorOptions
-      -- | The server provides folding provider support. Since LSP 3.10
-      --
-      -- @since 0.7.0.0
-    , _foldingRangeProvider             :: Maybe FoldingRangeOptions
-      -- | The server provides execute command support.
-    , _executeCommandProvider           :: Maybe ExecuteCommandOptions
-      -- | Workspace specific server capabilities
-    , _workspace                        :: Maybe WorkspaceOptions
-      -- | Experimental server capabilities.
-    , _experimental                     :: Maybe A.Value
-    } deriving (Show, Read, Eq)
-
-deriveJSON lspOptions ''InitializeResponseCapabilitiesInner
-
--- ---------------------------------------------------------------------
 -- |
 --   Information about the capabilities of a language server
 --
 data InitializeResponseCapabilities =
   InitializeResponseCapabilities {
-    _capabilities :: InitializeResponseCapabilitiesInner
+    _capabilities :: ServerCapabilities
   } deriving (Show, Read, Eq)
 
 deriveJSON lspOptions ''InitializeResponseCapabilities
@@ -919,96 +318,6 @@ Notification:
     method: 'telemetry/event'
     params: 'any'
 -}
-
-
--- ---------------------------------------------------------------------
-{-
-New in 3.0
-----------
-
-Register Capability
-
-The client/registerCapability request is sent from the server to the client to
-register for a new capability on the client side. Not all clients need to
-support dynamic capability registration. A client opts in via the
-ClientCapabilities.dynamicRegistration property.
-
-Request:
-
-    method: 'client/registerCapability'
-    params: RegistrationParams
-
-Where RegistrationParams are defined as follows:
-
-/**
- * General paramters to to regsiter for a capability.
- */
-export interface Registration {
-        /**
-         * The id used to register the request. The id can be used to deregister
-         * the request again.
-         */
-        id: string;
-
-        /**
-         * The method / capability to register for.
-         */
-        method: string;
-
-        /**
-         * Options necessary for the registration.
-         */
-        registerOptions?: any;
-}
-
-export interface RegistrationParams {
-        registrations: Registration[];
-}
--}
-
-data Registration =
-  Registration
-    { -- |The id used to register the request. The id can be used to deregister
-      -- the request again.
-      _id              :: Text
-
-       -- | The method / capability to register for.
-    , _method          :: SomeClientMethod
-
-      -- | Options necessary for the registration.
-    , _registerOptions :: Maybe A.Value
-    } deriving (Show, Eq)
-
-deriveJSON lspOptions ''Registration
-
-data RegistrationParams =
-  RegistrationParams
-    { _registrations :: List Registration
-    } deriving (Show, Eq)
-
-deriveJSON lspOptions ''RegistrationParams
-
--- -------------------------------------
-
-{-
-Since most of the registration options require to specify a document selector
-there is a base interface that can be used.
-
-export interface TextDocumentRegistrationOptions {
-        /**
-         * A document selector to identify the scope of the registration. If set to null
-         * the document selector provided on the client side will be used.
-         */
-        documentSelector: DocumentSelector | null;
-}
--}
-
-data TextDocumentRegistrationOptions =
-  TextDocumentRegistrationOptions
-    { _documentSelector :: Maybe DocumentSelector
-    } deriving (Show, Read, Eq)
-
-deriveJSON lspOptions ''TextDocumentRegistrationOptions
 
 -- ---------------------------------------------------------------------
 {-
@@ -1374,11 +683,13 @@ export interface TextDocumentChangeRegistrationOptions extends TextDocumentRegis
 
 data TextDocumentChangeRegistrationOptions =
   TextDocumentChangeRegistrationOptions
-    { _documentSelector :: Maybe DocumentSelector
-    , _syncKind         :: TextDocumentSyncKind
+    { _textDocumentRegistrationOptions :: TextDocumentRegistrationOptions
+    -- | How documents are synced to the server.
+    -- See 'TdSyncFull' and 'TdSyncIncremental'
+    , _syncKind                        :: TextDocumentSyncKind
     } deriving (Show, Read, Eq)
 
-deriveJSON lspOptions ''TextDocumentChangeRegistrationOptions
+deriveJSONExtendFields lspOptions ''TextDocumentChangeRegistrationOptions ["_textDocumentRegistrationOptions"]
 
 -- ---------------------------------------------------------------------
 {-
@@ -1493,27 +804,68 @@ Registration Options: TextDocumentRegistrationOptions
 {-
 DidSaveTextDocument Notification
 
-https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md#didsavetextdocument-notification
+The document save notification is sent from the client to the server when the document was saved in the client.
 
-    New: The document save notification is sent from the client to the server
-    when the document was saved in the client.
+Client Capability:
 
-    method: 'textDocument/didSave'
-    params: DidSaveTextDocumentParams defined as follows:
+property name (optional): textDocument.synchronization.didSave
+property type: boolean
+The capability indicates that the client supports textDocument/didSave notifications.
 
+Server Capability:
+
+property name (optional): textDocumentSync.save
+property type: boolean | SaveOptions where SaveOptions is defined as follows:
+export interface SaveOptions {
+	/**
+	 * The client is supposed to include the content on save.
+	 */
+	includeText?: boolean;
+}
+The capability indicates that the server is interested in textDocument/didSave notifications.
+
+Registration Options: TextDocumentSaveRegistrationOptions defined as follows:
+
+export interface TextDocumentSaveRegistrationOptions extends TextDocumentRegistrationOptions {
+	/**
+	 * The client is supposed to include the content on save.
+	 */
+	includeText?: boolean;
+}
+Notification:
+
+method: 'textDocument/didSave'
+params: DidSaveTextDocumentParams defined as follows:
 interface DidSaveTextDocumentParams {
-    /**
-     * The document that was saved.
-     */
-    textDocument: TextDocumentIdentifier;
+	/**
+	 * The document that was saved.
+	 */
+	textDocument: TextDocumentIdentifier;
+
+	/**
+	 * Optional the content when saved. Depends on the includeText value
+	 * when the save notification was requested.
+	 */
+	text?: string;
 }
 -}
 data DidSaveTextDocumentParams =
   DidSaveTextDocumentParams
     { _textDocument :: TextDocumentIdentifier
+    , _text         :: Maybe Text
     } deriving (Read,Show,Eq)
 
 deriveJSON lspOptions ''DidSaveTextDocumentParams
+
+data TextDocumentSaveRegistrationOptions =
+  TextDocumentSaveRegistrationOptions
+    { _textDocumentRegistrationOptions :: TextDocumentRegistrationOptions
+    -- The spec doesn't say it extends SaveOptions, but it's the same fields.
+    -- Looks like an oversight
+    , _saveOptions                     :: SaveOptions
+    } deriving (Show, Read, Eq)
+
+deriveJSONExtendFields lspOptions ''TextDocumentSaveRegistrationOptions ["_textDocumentRegistrationOptions", "_saveOptions"]
 
 -- ---------------------------------------------------------------------
 {-
@@ -1807,11 +1159,11 @@ export interface SignatureHelpRegistrationOptions extends TextDocumentRegistrati
 
 data SignatureHelpRegistrationOptions =
   SignatureHelpRegistrationOptions
-    { _documentSelector  :: Maybe DocumentSelector
-    , _triggerCharacters :: Maybe (List String)
+    { _textDocumentRegistrationOptions :: TextDocumentRegistrationOptions
+    , _signatureHelpOptions            :: SignatureHelpOptions
     } deriving (Show, Read, Eq)
 
-deriveJSON lspOptions ''SignatureHelpRegistrationOptions
+deriveJSONExtendFields lspOptions ''SignatureHelpRegistrationOptions ["_textDocumentRegistrationOptions", "_signatureHelpOptions"]
 
 -- ---------------------------------------------------------------------
 {-
@@ -1819,23 +1171,48 @@ Goto Definition Request
 
 https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md#goto-definition-request
 
-The goto definition request is sent from the client to the server to resolve the
-definition location of a symbol at a given text document position.
+The go to definition request is sent from the client to the server to resolve the definition location of a symbol at a given text document position.
 
-    Changed: In 2.0 the request uses TextDocumentPositionParams with proper
-    textDocument and position properties. In 1.0 the uri of the referenced text
-    document was inlined into the params object.
+The result type LocationLink[] got introduced with version 3.14.0 and depends on the corresponding client capability textDocument.definition.linkSupport.
 
-Request
+Client Capability:
 
-    method: 'textDocument/definition'
-    params: TextDocumentPositionParams
+property name (optional): textDocument.definition
+property type: DefinitionClientCapabilities defined as follows:
+export interface DefinitionClientCapabilities {
+	/**
+	 * Whether definition supports dynamic registration.
+	 */
+	dynamicRegistration?: boolean;
 
+	/**
+	 * The client supports additional metadata in the form of definition links.
+	 *
+	 * @since 3.14.0
+	 */
+	linkSupport?: boolean;
+}
+Server Capability:
+
+property name (optional): definitionProvider
+property type: boolean | DefinitionOptions where DefinitionOptions is defined as follows:
+export interface DefinitionOptions extends WorkDoneProgressOptions {
+}
+Registration Options: DefinitionRegistrationOptions defined as follows:
+
+export interface DefinitionRegistrationOptions extends TextDocumentRegistrationOptions, DefinitionOptions {
+}
+Request:
+
+method: ‘textDocument/definition’
+params: DefinitionParams defined as follows:
+export interface DefinitionParams extends TextDocumentPositionParams, WorkDoneProgressParams, PartialResultParams {
+}
 Response:
 
-    result: Location | Location[]
-    error: code and message set in case an exception happens during the definition request.
-
+result: Location | Location[] | LocationLink[] | null
+partial result: Location[] | LocationLink[]
+error: code and message set in case an exception happens during the definition request.
 
 -}
 
@@ -1871,6 +1248,30 @@ error: code and message set in case an exception happens during the definition r
 Registration Options: TextDocumentRegistrationOptions
 -}
 
+data TypeDefinitionOptions =
+  TypeDefinitionOptions
+    { _workDoneProgressOptions :: WorkDoneProgressOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''TypeDefinitionOptions ["_workDoneProgressOptions"]
+
+data StaticRegistrationOptions =
+  StaticRegistrationOptions
+    { _id :: Maybe Text
+    } deriving (Read,Show,Eq)
+deriveJSON lspOptions ''StaticRegistrationOptions
+
+data TypeDefinitionRegistrationOptions =
+  TypeDefinitionRegistrationOptions
+    { _textDocumentRegistrationOptions :: TextDocumentRegistrationOptions
+    , _typeDefinitionOptions           :: TypeDefinitionOptions
+    , _staticRegistrationOptions       :: StaticRegistrationOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''TypeDefinitionRegistrationOptions
+  [ "_textDocumentRegistrationOptions"
+  , "_typeDefinitionOptions"
+  , "_staticRegistrationOptions"
+  ]
+
 -- ---------------------------------------------------------------------
 
 {-
@@ -1889,6 +1290,24 @@ result: Location | Location[] | null
 error: code and message set in case an exception happens during the definition request.
 Registration Options: TextDocumentRegistrationOptions
 -}
+
+data ImplementationOptions =
+  ImplementationOptions
+    { _workDoneProgressOptions :: WorkDoneProgressOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''ImplementationOptions ["_workDoneProgressOptions"]
+
+data ImplementationRegistrationOptions =
+  ImplementationRegistrationOptions
+    { _textDocumentRegistrationOptions :: TextDocumentRegistrationOptions
+    , _implementationOptions           :: ImplementationOptions
+    , _staticRegistrationOptions       :: StaticRegistrationOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''ImplementationRegistrationOptions
+  [ "_textDocumentRegistrationOptions"
+  , "_implementationOptions"
+  , "_staticRegistrationOptions"
+  ]
 
 -- ---------------------------------------------------------------------
 
@@ -1945,6 +1364,22 @@ data ReferenceParams =
     } deriving (Read,Show,Eq)
 
 deriveJSON lspOptions ''ReferenceParams
+
+data ReferenceOptions =
+  ReferenceOptions
+    { _workDoneProgressOptions :: WorkDoneProgressOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''ReferenceOptions ["_workDoneProgressOptions"]
+
+data ReferenceRegistrationOptions =
+  ReferenceRegistrationOptions
+    { _textDocumentRegistrationOptions :: TextDocumentRegistrationOptions
+    , _referenceOptions                :: ReferenceOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''ReferenceRegistrationOptions
+  [ "_textDocumentRegistrationOptions"
+  , "_referenceOptions"
+  ]
 
 -- ---------------------------------------------------------------------
 {-
@@ -2081,122 +1516,6 @@ data WorkspaceSymbolParams =
 
 deriveJSON lspOptions ''WorkspaceSymbolParams
 
--- ---------------------------------------------------------------------
-{-
-Code Lens Request
-
-The code lens request is sent from the client to the server to compute code
-lenses for a given text document.
-
-    Changed: In 2.0 the request uses CodeLensParams instead of a single uri.
-
-Request
-
-    method: 'textDocument/codeLens'
-    params: CodeLensParams defined as follows:
-
-interface CodeLensParams {
-    /**
-     * The document to request code lens for.
-     */
-    textDocument: TextDocumentIdentifier;
-}
-
-Response
-
-    result: CodeLens[] defined as follows:
-
-/**
- * A code lens represents a command that should be shown along with
- * source text, like the number of references, a way to run tests, etc.
- *
- * A code lens is _unresolved_ when no command is associated to it. For performance
- * reasons the creation of a code lens and resolving should be done in two stages.
- */
-interface CodeLens {
-    /**
-     * The range in which this code lens is valid. Should only span a single line.
-     */
-    range: Range;
-
-    /**
-     * The command this code lens represents.
-     */
-    command?: Command;
-
-    /**
-     * A data entry field that is preserved on a code lens item between
-     * a code lens and a code lens resolve request.
-     */
-    data?: any
-}
-
-    error: code and message set in case an exception happens during the code
-           lens request.
--}
-
-data CodeLensParams =
-  CodeLensParams
-    { _textDocument :: TextDocumentIdentifier
-    , _workDoneToken :: Maybe ProgressToken -- ^ An optional token that a server can use to report work done progress.
-    } deriving (Read,Show,Eq)
-
-deriveJSON lspOptions ''CodeLensParams
-
-
--- -------------------------------------
-
-data CodeLens =
-  CodeLens
-    { _range   :: Range
-    , _command :: Maybe Command
-    , _xdata   :: Maybe A.Value
-    } deriving (Read,Show,Eq)
-
-deriveJSON lspOptions{ fieldLabelModifier = customModifier } ''CodeLens
-
--- -------------------------------------
-{-
-Registration Options: CodeLensRegistrationOptions defined as follows:
-
-export interface CodeLensRegistrationOptions extends TextDocumentRegistrationOptions {
-        /**
-         * Code lens has a resolve provider as well.
-         */
-        resolveProvider?: boolean;
-}
--}
-
-data CodeLensRegistrationOptions =
-  CodeLensRegistrationOptions
-    { _documentSelector :: Maybe DocumentSelector
-    , _resolveProvider  :: Maybe Bool
-    } deriving (Show, Read, Eq)
-
-deriveJSON lspOptions ''CodeLensRegistrationOptions
-
--- ---------------------------------------------------------------------
-{-
-Code Lens Resolve Request
-
-https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md#code-lens-resolve-request
-
-The code lens resolve request is sent from the client to the server to resolve
-the command for a given code lens item.
-
-Request
-
-    method: 'codeLens/resolve'
-    params: CodeLens
-
-Response
-
-    result: CodeLens
-    error: code and message set in case an exception happens during the code
-           lens resolve request.
-
-
--}
 
 -- ---------------------------------------------------------------------
 {-
@@ -2359,6 +1678,23 @@ data DocumentFormattingParams =
     } deriving (Show,Read,Eq)
 
 deriveJSON lspOptions ''DocumentFormattingParams
+
+data DocumentFormattingOptions =
+  DocumentFormattingOptions
+    { _workDoneProgressOptions :: WorkDoneProgressOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''DocumentFormattingOptions ["_workDoneProgressOptions"]
+
+data DocumentFormattingRegistrationOptions =
+  DocumentFormattingRegistrationOptions
+    { _textDocumentRegistrationOptions :: TextDocumentRegistrationOptions
+    , _documentFormattingOptions       :: DocumentFormattingOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''DocumentFormattingRegistrationOptions
+  [ "_textDocumentRegistrationOptions"
+  , "_documentFormattingOptions"
+  ]
+
 -- ---------------------------------------------------------------------
 {-
 Document Range Formatting Request
@@ -2407,6 +1743,22 @@ data DocumentRangeFormattingParams =
     } deriving (Read,Show,Eq)
 
 deriveJSON lspOptions ''DocumentRangeFormattingParams
+
+data DocumentRangeFormattingOptions =
+  DocumentRangeFormattingOptions
+    { _workDoneProgressOptions :: WorkDoneProgressOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''DocumentRangeFormattingOptions ["_workDoneProgressOptions"]
+
+data DocumentRangeFormattingRegistrationOptions =
+  DocumentRangeFormattingRegistrationOptions
+    { _textDocumentRegistrationOptions :: TextDocumentRegistrationOptions
+    , _documentRangeFormattingOptions  :: DocumentRangeFormattingOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''DocumentRangeFormattingRegistrationOptions
+  [ "_textDocumentRegistrationOptions"
+  , "_documentRangeFormattingOptions"
+  ]
 
 -- ---------------------------------------------------------------------
 {-
@@ -2476,11 +1828,15 @@ deriveJSON lspOptions ''DocumentOnTypeFormattingParams
 
 data DocumentOnTypeFormattingRegistrationOptions =
   DocumentOnTypeFormattingRegistrationOptions
-    { _firstTriggerCharacter :: Text
-    , _moreTriggerCharacter  :: Maybe (List String)
-    } deriving (Show, Read, Eq)
-
-deriveJSON lspOptions ''DocumentOnTypeFormattingRegistrationOptions
+    { _textDocumentRegistrationOptions :: TextDocumentRegistrationOptions
+     -- This doesn't extend WorkDoneProgressOptions -- is this an oversight in the spec?
+     -- https://github.com/microsoft/language-server-protocol/issues/987
+    , _documentOnTypeFormattingOptions  :: DocumentOnTypeFormattingOptions
+    } deriving (Read,Show,Eq)
+deriveJSONExtendFields lspOptions ''DocumentOnTypeFormattingRegistrationOptions
+  [ "_textDocumentRegistrationOptions"
+  , "_documentOnTypeFormattingOptions"
+  ]
 
 -- ---------------------------------------------------------------------
 {-

@@ -19,6 +19,7 @@ import           Language.Haskell.LSP.Types.DocumentFilter
 import           Language.Haskell.LSP.Types.FoldingRange
 import           Language.Haskell.LSP.Types.Hover
 import           Language.Haskell.LSP.Types.Location
+import           Language.Haskell.LSP.Types.Registration
 import           Language.Haskell.LSP.Types.Symbol
 import           Language.Haskell.LSP.Types.TextDocument
 import           Language.Haskell.LSP.Types.Window
@@ -98,12 +99,12 @@ makeFieldsNoPrefix ''DidChangeTextDocumentParams
 makeFieldsNoPrefix ''TextDocumentChangeRegistrationOptions
 makeFieldsNoPrefix ''WillSaveTextDocumentParams
 makeFieldsNoPrefix ''DidSaveTextDocumentParams
+makeFieldsNoPrefix ''TextDocumentSaveRegistrationOptions
 makeFieldsNoPrefix ''DidCloseTextDocumentParams
 makeFieldsNoPrefix ''FileEvent
 makeFieldsNoPrefix ''DidChangeWatchedFilesParams
 makeFieldsNoPrefix ''PublishDiagnosticsParams
 makeFieldsNoPrefix ''LanguageString
-makeFieldsNoPrefix ''Hover
 makeFieldsNoPrefix ''ParameterInformation
 makeFieldsNoPrefix ''SignatureInformation
 makeFieldsNoPrefix ''SignatureHelp
@@ -180,6 +181,10 @@ makeFieldsNoPrefix ''Command
 -- Diagnostic
 makeFieldsNoPrefix ''Diagnostic
 makeFieldsNoPrefix ''DiagnosticRelatedInformation
+
+-- Hover
+makeFieldsNoPrefix ''Hover
+makeFieldsNoPrefix ''HoverRegistrationOptions
 
 -- Symbol
 makeFieldsNoPrefix ''DocumentSymbolParams
