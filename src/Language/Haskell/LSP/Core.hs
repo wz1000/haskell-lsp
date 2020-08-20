@@ -57,6 +57,8 @@ import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Char8 as B
 import           Data.Default
 import           Data.IxMap
+import qualified Data.Dependent.Map as DMap
+import           Data.Dependent.Map (DMap)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.List as L
 import           Data.List.NonEmpty (NonEmpty(..))
@@ -332,7 +334,7 @@ mkSendReqFunc m params resHandler = do
 -- 'a', a function to send a reply message once encoded as a ByteString, and a
 -- received message of type 'b'
 newtype Handler m = Handler {runHandler :: ClientMessage m -> ClientResponseHandler m -> IO ()}
-type Handlers = forall t (m :: Method FromClient t). SMethod m -> Maybe (Handler m)
+type Handlers = DMap SMethod Handler
 
 -- ---------------------------------------------------------------------
 nop :: Maybe (b -> LspM config ())
@@ -355,11 +357,11 @@ handlerMap c = case c of
 hh :: Maybe (ClientMessage m -> LspM config ()) -> SClientMethod m -> ClientMessage m -> LspM config ()
 hh mAction m req = do
   maybe (return ()) (\f -> f req) mAction
-  getHandler <- asks resHandlers
+  handlers <- asks resHandlers
   let handleReq h = do
         respH <- mkClientResponseHandler m req
         liftIO $ runHandler h req respH
-  case getHandler m of
+  case DMap.lookup m handlers of
     Just h -> handleReq h
     Nothing
       | SExit <- m -> handleReq exitNotificationHandler
