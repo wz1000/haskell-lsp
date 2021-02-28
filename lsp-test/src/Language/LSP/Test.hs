@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE TypeApplications #-}
 
 {-|
 Module      : Language.LSP.Test
@@ -129,6 +130,7 @@ import System.Directory
 import System.FilePath
 import System.Process (ProcessHandle)
 import qualified System.FilePath.Glob as Glob
+import Data.Coerce
 
 -- | Starts a new session.
 --
@@ -495,8 +497,7 @@ getDocumentSymbols :: TextDocumentIdentifier -> Session (Either [DocumentSymbol]
 getDocumentSymbols doc = do
   ResponseMessage _ rspLid res <- request STextDocumentDocumentSymbol (DocumentSymbolParams Nothing Nothing doc)
   case res of
-    Right (InL (List xs)) -> return (Left xs)
-    Right (InR (List xs)) -> return (Right xs)
+    Right x -> pure $ unionCase x (Left . coerce) (Right . coerce)
     Left err -> throw (UnexpectedResponseError (SomeLspId $ fromJust rspLid) err)
 
 -- | Returns the code actions in the specified range.
@@ -610,7 +611,7 @@ applyEdit doc edit = do
   let wEdit = if supportsDocChanges
       then
         let docEdit = TextDocumentEdit verDoc (List [edit])
-        in WorkspaceEdit Nothing (Just (List [InL docEdit]))
+        in WorkspaceEdit Nothing (Just (List [ulift docEdit]))
       else
         let changes = HashMap.singleton (doc ^. uri) (List [edit])
         in WorkspaceEdit (Just changes) Nothing
@@ -626,9 +627,7 @@ getCompletions :: TextDocumentIdentifier -> Position -> Session [CompletionItem]
 getCompletions doc pos = do
   rsp <- request STextDocumentCompletion (CompletionParams doc pos Nothing Nothing Nothing)
 
-  case getResponseResult rsp of
-    InL (List items) -> return items
-    InR (CompletionList _ (List items)) -> return items
+  pure $ unionCase (getResponseResult rsp) coerce (coerce . view items)
 
 -- | Returns the references for the position in the document.
 getReferences :: TextDocumentIdentifier -- ^ The document to lookup in.
@@ -678,10 +677,7 @@ getDeclarationyRequest :: (ResponseResult m ~ (Location |? (List Location |? Lis
 getDeclarationyRequest method paramCons doc pos = do
   let params = paramCons doc pos Nothing Nothing
   rsp <- request method params
-  case getResponseResult rsp of
-      InL loc -> pure (InL [loc])
-      InR (InL (List locs)) -> pure (InL locs)
-      InR (InR (List locLinks)) -> pure (InR locLinks)
+  pure $ unionCase (getResponseResult rsp) (ulift . (:[])) (ulift . coerce @_ @[Location]) (ulift . coerce @_ @[LocationLink])
 
 -- | Renames the term at the specified position.
 rename :: TextDocumentIdentifier -> Position -> String -> Session ()

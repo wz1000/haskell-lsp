@@ -771,9 +771,9 @@ reverseSortEdit (J.WorkspaceEdit cs dcs) = J.WorkspaceEdit cs' dcs'
     sortTextEdits (J.List edits) = J.List (L.sortBy down edits)
 
     sortOnlyTextDocumentEdits :: J.DocumentChange -> J.DocumentChange
-    sortOnlyTextDocumentEdits (J.InL (J.TextDocumentEdit td (J.List edits))) = J.InL $ J.TextDocumentEdit td (J.List edits')
+    sortOnlyTextDocumentEdits (J.umatch @J.TextDocumentEdit -> Right (J.TextDocumentEdit td (J.List edits))) = J.ulift $ J.TextDocumentEdit td (J.List edits')
       where
         edits' = L.sortBy down edits
-    sortOnlyTextDocumentEdits (J.InR others) = J.InR others
+    sortOnlyTextDocumentEdits others = others
 
     down (J.TextEdit r1 _) (J.TextEdit r2 _) = r2 `compare` r1

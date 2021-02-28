@@ -7,6 +7,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
 module Language.LSP.Server.Processing where
 
@@ -178,7 +179,8 @@ inferServerCapabilities clientCaps o h =
 
     -- | For when we just return a simple @true@/@false@ to indicate if we
     -- support the capability
-    supportedBool = Just . InL . supported_b
+    supportedBool :: UElem Bool as bs => SClientMethod m -> Maybe (Union as)
+    supportedBool = Just . ulift . supported_b
 
     supported' m b
       | supported_b m = Just b
@@ -211,10 +213,10 @@ inferServerCapabilities clientCaps o h =
     codeActionProvider
       | clientSupportsCodeActionKinds
       , supported_b STextDocumentCodeAction = Just $
-          maybe (InL True) (InR . CodeActionOptions Nothing . Just . List)
+          maybe (ulift True) (ulift . CodeActionOptions Nothing . Just . List)
                 (codeActionKinds o)
-      | supported_b STextDocumentCodeAction = Just (InL True)
-      | otherwise = Just (InL False)
+      | supported_b STextDocumentCodeAction = Just (ulift True)
+      | otherwise = Just (ulift False)
 
     signatureHelpProvider
       | supported_b STextDocumentSignatureHelp = Just $
@@ -248,18 +250,18 @@ inferServerCapabilities clientCaps o h =
       | clientSupportsPrepareRename
       , supported_b STextDocumentRename
       , supported_b STextDocumentPrepareRename = Just $
-          InR . RenameOptions Nothing . Just $ True
-      | supported_b STextDocumentRename = Just (InL True)
-      | otherwise = Just (InL False)
+          ulift . RenameOptions Nothing . Just $ True
+      | supported_b STextDocumentRename = Just (ulift True)
+      | otherwise = Just (ulift False)
 
     sync = case textDocumentSync o of
-            Just x -> Just (InL x)
+            Just x -> Just (ulift x)
             Nothing -> Nothing
 
     workspace = WorkspaceServerCapabilities workspaceFolder
     workspaceFolder = supported' SWorkspaceDidChangeWorkspaceFolders $
         -- sign up to receive notifications
-        WorkspaceFoldersServerCapabilities (Just True) (Just (InR True))
+        WorkspaceFoldersServerCapabilities (Just True) (Just (ulift True))
 
 -- | Invokes the registered dynamic or static handlers for the given message and
 -- method, as well as doing some bookkeeping.

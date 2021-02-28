@@ -4,6 +4,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 
 import DummyServer
 import           Test.Hspec
@@ -165,7 +167,7 @@ main = hspec $ around withDummyServer $ do
     it "works" $ \(hin, hout) -> runSessionWithHandles hin hout def fullCaps "." $ do
       doc <- openDoc "test/data/refactor/Main.hs" "haskell"
       waitForDiagnostics
-      [InR action] <- getCodeActions doc (Range (Position 0 0) (Position 0 2))
+      [umatch @CodeAction -> Right action] <- getCodeActions doc (Range (Position 0 0) (Position 0 2))
       actions <- getCodeActions doc (Range (Position 1 14) (Position 1 18))
       liftIO $ action ^. title `shouldBe` "Delete this"
       liftIO $ actions `shouldSatisfy` null
@@ -176,7 +178,7 @@ main = hspec $ around withDummyServer $ do
       _ <- waitForDiagnostics
       actions <- getAllCodeActions doc
       liftIO $ do
-        let [InR action] = actions
+        let [umatch @CodeAction -> Right action] = actions
         action ^. title `shouldBe` "Delete this"
         action ^. command . _Just . command  `shouldBe` "deleteThis"
 

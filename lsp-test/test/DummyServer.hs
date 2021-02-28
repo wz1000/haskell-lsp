@@ -61,7 +61,7 @@ handlers =
         \_req responder ->
           responder $
             Right $
-              InL $
+              ulift $
                 List
                   [ DocumentSymbol
                       "foo"
@@ -81,7 +81,7 @@ handlers =
                 Diagnostic
                   (mkRange 0 0 0 1)
                   (Just DsWarning)
-                  (Just (InL 42))
+                  (Just (ulift (42 :: Int)))
                   (Just "dummy-server")
                   "Here's a warning"
                   Nothing
@@ -160,7 +160,7 @@ handlers =
                 Nothing
                 Nothing
                 (Just (Command "" "deleteThis" Nothing))
-        resp $ Right $ InR <$> codeActions
+        resp $ Right $ ulift <$> codeActions
      , requestHandler STextDocumentCompletion $ \_req resp -> do
         let res = CompletionList True (List [item])
             item =
@@ -182,5 +182,5 @@ handlers =
                 Nothing
                 Nothing
                 Nothing
-        resp $ Right $ InR res
+        resp $ Right $ ulift res
     ]

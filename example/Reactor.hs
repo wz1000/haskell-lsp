@@ -99,7 +99,7 @@ syncOptions = J.TextDocumentSyncOptions
   , J._change            = Just J.TdSyncIncremental
   , J._willSave          = Just False
   , J._willSaveWaitUntil = Just False
-  , J._save              = Just $ J.InR $ J.SaveOptions $ Just False
+  , J._save              = Just $ J.ulift $ J.SaveOptions $ Just False
   }
 
 lspOptions :: Options
@@ -230,7 +230,7 @@ handle = mconcat
       let edit = J.TextEdit (J.mkRange l c l (c + T.length newName)) newName
           tde = J.TextDocumentEdit vdoc (J.List [edit])
           -- "documentChanges" field is preferred over "changes"
-          rsp = J.WorkspaceEdit Nothing (Just (J.List [J.InL tde]))
+          rsp = J.WorkspaceEdit Nothing (Just (J.List [J.ulift tde]))
       responder (Right rsp)
 
   , requestHandler J.STextDocumentHover $ \req responder -> do
@@ -260,7 +260,7 @@ handle = mconcat
                       ]
               cmdparams = Just args
           makeCommand (J.Diagnostic _r _s _c _source _m _t _l) = []
-          rsp = J.List $ map J.InL $ concatMap makeCommand diags
+          rsp = J.List $ map J.ulift $ concatMap makeCommand diags
       responder (Right rsp)
 
   , requestHandler J.SWorkspaceExecuteCommand $ \req responder -> do

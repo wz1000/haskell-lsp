@@ -8,6 +8,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeInType #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.LSP.Test.Session
   ( Session(..)
@@ -313,10 +315,10 @@ updateStateC = awaitForever $ \msg -> do
 -- extract Uri out from DocumentChange
 -- didn't put this in `lsp-types` because TH was getting in the way
 documentChangeUri :: DocumentChange -> Uri
-documentChangeUri (InL x) = x ^. textDocument . uri
-documentChangeUri (InR (InL x)) = x ^. uri
-documentChangeUri (InR (InR (InL x))) = x ^. oldUri
-documentChangeUri (InR (InR (InR x))) = x ^. uri
+documentChangeUri x = unionCase x (view $ textDocument . uri)
+                                  (view uri)
+                                  (view oldUri)
+                                  (view uri)
 
 updateState :: (MonadIO m, HasReader SessionContext m, HasState SessionState m)
             => FromServerMessage -> m ()
@@ -405,7 +407,7 @@ updateState (FromServerMess SWorkspaceApplyEdit r) = do
             in DidChangeTextDocumentParams docId (List changeEvents)
 
         getParamsFromDocumentChange :: DocumentChange -> Maybe DidChangeTextDocumentParams
-        getParamsFromDocumentChange (InL textDocumentEdit) = Just $ getParamsFromTextDocumentEdit textDocumentEdit
+        getParamsFromDocumentChange (umatch @TextDocumentEdit -> Right textDocumentEdit) = Just $ getParamsFromTextDocumentEdit textDocumentEdit
         getParamsFromDocumentChange _ = Nothing
 
 

@@ -67,8 +67,8 @@ mapUris f event =
     fromServerMsg (FromServerMess m@STextDocumentPublishDiagnostics n) = FromServerMess m $ swapUri params n
     fromServerMsg (FromServerRsp m@STextDocumentDocumentSymbol r) =
       let swapUri' :: (List DocumentSymbol |? List SymbolInformation) -> List DocumentSymbol |? List SymbolInformation
-          swapUri' (InR si) = InR (swapUri location <$> si)
-          swapUri' (InL dss) = InL dss -- no file locations here
+          swapUri' x = unionCase x  ulift -- no file locations here
+                                    (ulift . (fmap $ swapUri location))
       in FromServerRsp m $ r & result %~ (fmap swapUri')
     fromServerMsg (FromServerRsp m@STextDocumentRename r) = FromServerRsp m $ r & result %~ (fmap swapWorkspaceEdit)
     fromServerMsg x = x
@@ -76,12 +76,10 @@ mapUris f event =
     swapWorkspaceEdit :: WorkspaceEdit -> WorkspaceEdit
     swapWorkspaceEdit e =
       let swapDocumentChangeUri :: DocumentChange -> DocumentChange
-          swapDocumentChangeUri (InL textDocEdit) = InL $ swapUri textDocument textDocEdit
-          swapDocumentChangeUri (InR (InL createFile)) = InR $ InL $ swapUri id createFile
-          -- for RenameFile, we swap `newUri`
-          swapDocumentChangeUri (InR (InR (InL renameFile))) = InR $ InR $ InL $ newUri .~ f (renameFile ^. newUri) $ renameFile
-          swapDocumentChangeUri (InR (InR (InR deleteFile))) = InR $ InR $ InR $ swapUri id deleteFile
-
+          swapDocumentChangeUri x = unionCase x (ulift . swapUri textDocument)
+                                                (ulift . swapUri id)
+                                                (\renameFile -> ulift $ (newUri .~ f (renameFile ^. newUri)) renameFile)
+                                                (ulift . swapUri id)
           newDocChanges = fmap (fmap swapDocumentChangeUri) $ e ^. documentChanges
           newChanges = fmap (swapKeys f) $ e ^. changes
        in WorkspaceEdit newChanges newDocChanges

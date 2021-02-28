@@ -6,6 +6,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeInType #-}
+{-# LANGUAGE TypeApplications #-}
 
 {-|
 Handles the "Language.LSP.Types.TextDocumentDidChange" \/
@@ -53,6 +54,7 @@ import           Data.Maybe
 import           Data.Rope.UTF16 ( Rope )
 import qualified Data.Rope.UTF16 as Rope
 import qualified Language.LSP.Types           as J
+import Language.LSP.Types (umatch, ulift, unionCase)
 import qualified Language.LSP.Types.Lens      as J
 import           System.FilePath
 import           Data.Hashable
@@ -198,10 +200,9 @@ applyTextDocumentEdit (J.TextDocumentEdit vid (J.List edits)) vfs = do
     editToChangeEvent (J.TextEdit range text) = J.TextDocumentContentChangeEvent (Just range) Nothing text
 
 applyDocumentChange :: J.DocumentChange -> VFS -> IO VFS 
-applyDocumentChange (J.InL               change)   = applyTextDocumentEdit change
-applyDocumentChange (J.InR (J.InL        change))  = return . applyCreateFile change
-applyDocumentChange (J.InR (J.InR (J.InL change))) = return . applyRenameFile change
-applyDocumentChange (J.InR (J.InR (J.InR change))) = return . applyDeleteFile change
+applyDocumentChange change = case umatch change of
+  Right docEdit -> applyTextDocumentEdit docEdit
+  Left other -> return . unionCase other applyCreateFile applyRenameFile applyDeleteFile
 
 -- ^ Applies the changes from a 'ApplyWorkspaceEditRequest' to the 'VFS'
 changeFromServerVFS :: VFS -> J.Message 'J.WorkspaceApplyEdit -> IO VFS
@@ -211,7 +212,7 @@ changeFromServerVFS initVfs (J.RequestMessage _ _ _ params) = do
   case mDocChanges of
     Just (J.List docChanges) -> applyDocumentChanges docChanges
     Nothing -> case mChanges of
-      Just cs -> applyDocumentChanges $ map J.InL $ HashMap.foldlWithKey' changeToTextDocumentEdit [] cs
+      Just cs -> applyDocumentChanges $ map ulift $ HashMap.foldlWithKey' changeToTextDocumentEdit [] cs
       Nothing -> do
         debugM "haskell-lsp.changeVfs" "No changes"
         return initVfs
@@ -225,7 +226,7 @@ changeFromServerVFS initVfs (J.RequestMessage _ _ _ params) = do
         
     -- for sorting [DocumentChange]
     project :: J.DocumentChange -> J.TextDocumentVersion -- type TextDocumentVersion = Maybe Int
-    project (J.InL textDocumentEdit) = textDocumentEdit ^. J.textDocument . J.version
+    project (umatch @J.TextDocumentEdit -> Right textDocumentEdit) = textDocumentEdit ^. J.textDocument . J.version
     project _ = Nothing
 
 -- ---------------------------------------------------------------------
