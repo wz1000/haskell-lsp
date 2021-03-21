@@ -40,6 +40,7 @@ library
                      , directory
                      , data-default
                      , filepath
+                     , ghc-prim
                      , hslogger
                      , hashable
                      , lsp-types == 1.1.*

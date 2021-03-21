@@ -49,6 +49,7 @@ library
                      , data-default
                      , Diff
                      , directory
+                     , exceptions
                      , filepath
                      , Glob >= 0.9 && < 0.11
                      , lens

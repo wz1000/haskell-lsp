@@ -9,6 +9,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Language.LSP.Test.Parsing
   ( -- $receiving
@@ -99,7 +100,7 @@ satisfyMaybeM pred = do
     bumpTimeoutId timeoutId
     liftIO $ killThread tid
 
-  modify $ \s -> s { lastReceivedMessage = Just x }
+  modify $ \ !s -> s { lastReceivedMessage = Just $! x }
 
   res <- pred x
 
@@ -109,13 +110,13 @@ satisfyMaybeM pred = do
       return a
     Nothing -> empty
 
-named :: T.Text -> Session a -> Session a
+named :: String -> Session a -> Session a
 named s (Session x) = Session (Data.Conduit.Parser.named s x)
 
 
 -- | Matches a request or a notification coming from the server.
 message :: SServerMethod m -> Session (ServerMessage m)
-message m1 = named (T.pack $ "Request for: " <> show m1) $ satisfyMaybe $ \case
+message m1 = named ("Request for: " <> show m1) $ satisfyMaybe $ \case
   FromServerMess m2 msg -> do
     res <- mEqServer m1 m2
     case res of
@@ -124,7 +125,7 @@ message m1 = named (T.pack $ "Request for: " <> show m1) $ satisfyMaybe $ \case
   _ -> Nothing
 
 customRequest :: T.Text -> Session (ServerMessage (CustomMethod :: Method FromServer Request))
-customRequest m = named m $ satisfyMaybe $ \case
+customRequest m = named (T.unpack m) $ satisfyMaybe $ \case
   FromServerMess m1 msg -> case splitServerMethod m1 of
     IsServerEither -> case msg of
       ReqMess _ | m1 == SCustomMethod m -> Just msg
@@ -133,7 +134,7 @@ customRequest m = named m $ satisfyMaybe $ \case
   _ -> Nothing
 
 customNotification :: T.Text -> Session (ServerMessage (CustomMethod :: Method FromServer Notification))
-customNotification m = named m $ satisfyMaybe $ \case
+customNotification m = named (T.unpack m) $ satisfyMaybe $ \case
   FromServerMess m1 msg -> case splitServerMethod m1 of
     IsServerEither -> case msg of
       NotMess _ | m1 == SCustomMethod m -> Just msg
@@ -168,7 +169,7 @@ anyResponse = named "Any response" $ satisfy $ \case
 
 -- | Matches a response coming from the server.
 response :: SMethod (m :: Method FromClient Request) -> Session (ResponseMessage m)
-response m1 = named (T.pack $ "Response for: " <> show m1) $ satisfyMaybe $ \case
+response m1 = named ("Response for: " <> show m1) $ satisfyMaybe $ \case
   FromServerRsp m2 msg -> do
     HRefl <- runEq mEqClient m1 m2
     pure msg
@@ -176,7 +177,7 @@ response m1 = named (T.pack $ "Response for: " <> show m1) $ satisfyMaybe $ \cas
 
 -- | Like 'response', but matches a response for a specific id.
 responseForId :: SMethod (m :: Method FromClient Request) -> LspId m -> Session (ResponseMessage m)
-responseForId m lid = named (T.pack $ "Response for id: " ++ show lid) $ do
+responseForId m lid = named ("Response for id: " ++ show lid) $ do
   satisfyMaybe $ \msg -> do
     case msg of
       FromServerMess _ _ -> Nothing

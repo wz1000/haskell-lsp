@@ -12,6 +12,7 @@ import System.Environment
 import System.Time.Extra
 import Control.Concurrent
 import Data.IORef
+import GHC.Magic
 
 handlers :: Handlers (LspM ())
 handlers = mconcat
@@ -51,7 +52,8 @@ main = do
 
   Test.runSessionWithHandles hinWrite houtRead Test.defaultConfig Test.fullCaps "." $ do
     start <- liftIO offsetTime
-    replicateM_ n $ do
+    Test.anyMessage
+    inline replicateM_ n $ do
       n <- liftIO $ readIORef i
       liftIO $ when (n `mod` 1000 == 0) $ putStrLn $ show n
       ResponseMessage{_result=Right (Just _)} <- Test.request STextDocumentHover $

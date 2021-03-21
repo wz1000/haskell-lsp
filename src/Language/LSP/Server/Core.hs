@@ -22,6 +22,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE RoleAnnotations #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
 {-# OPTIONS_GHC -fprint-explicit-kinds #-}
 
@@ -66,6 +67,7 @@ import           System.Log.Logger
 import qualified System.Log.Logger as L
 import           System.Random hiding (next)
 import           Control.Monad.Trans.Identity
+import GHC.Magic (oneShot)
 
 -- ---------------------------------------------------------------------
 {-# ANN module ("HLint: ignore Eta reduce"         :: String) #-}
@@ -73,14 +75,49 @@ import           Control.Monad.Trans.Identity
 {-# ANN module ("HLint: ignore Reduce duplication" :: String) #-}
 -- ---------------------------------------------------------------------
 
-newtype LspT config m a = LspT { unLspT :: ReaderT (LanguageContextEnv config) m a }
-  deriving (Functor, Applicative, Monad, MonadIO, MonadTrans, MonadUnliftIO, MonadFix)
+newtype LspT config m a = LspT' { unLspT :: LanguageContextEnv config -> m a }
+
+{-# COMPLETE LspT #-}
+pattern LspT :: (LanguageContextEnv config -> m a) -> LspT config m a
+pattern LspT f <- LspT' f
+  where
+    LspT f = LspT' $ oneShot (\env -> f env)
+
+instance Functor f => Functor (LspT config f) where
+  {-# INLINE fmap #-}
+  fmap f (LspT m) = LspT $ \env -> fmap f (m env)
+
+instance Applicative f => Applicative (LspT config f) where
+  {-# INLINE pure #-}
+  pure a = LspT (const $ pure a)
+  {-# INLINE (<*>) #-}
+  LspT f <*> LspT x = LspT $ \env -> (f env) <*> (x env)
+
+instance Monad m => Monad (LspT config m) where
+  {-# INLINE (>>=) #-}
+  (LspT mx) >>= f = LspT $ \env -> runLspT env . f =<< mx env
+
+instance MonadTrans (LspT config) where
+  {-# INLINE lift #-}
+  lift m = LspT (const m)
+
+instance MonadFix m => MonadFix (LspT config m) where
+  {-# INLINE mfix #-}
+  mfix f = LspT $ \env -> mfix $ runLspT env . f
+
+instance MonadIO m => MonadIO (LspT config m) where
+  {-# INLINE liftIO #-}
+  liftIO = lift . liftIO
+
+instance MonadUnliftIO m => MonadUnliftIO (LspT config m) where
+  {-# INLINE withRunInIO #-}
+  withRunInIO inner = LspT $ \env -> withRunInIO $ \run -> inner (run . runLspT env)
 
 -- for deriving the instance of MonadUnliftIO
 type role LspT representational representational nominal
 
 runLspT :: LanguageContextEnv config -> LspT config m a -> m a
-runLspT env = flip runReaderT env . unLspT
+runLspT env = flip unLspT env
 
 {-# INLINE runLspT #-}
 
@@ -89,10 +126,18 @@ type LspM config = LspT config IO
 class MonadUnliftIO m => MonadLsp config m | m -> config where
   getLspEnv :: m (LanguageContextEnv config)
 
+  getsLspEnv :: (LanguageContextEnv config -> a) -> m a
+
+  {-# INLINE getsLspEnv #-}
+  getsLspEnv f = f <$> getLspEnv
+
 instance MonadUnliftIO m => MonadLsp config (LspT config m) where
   {-# SPECIALIZE instance MonadLsp config (LspT config IO) #-}
   {-# INLINE getLspEnv #-}
-  getLspEnv = LspT ask
+  getLspEnv = LspT pure
+
+  {-# INLINE getsLspEnv #-}
+  getsLspEnv f = LspT (pure . f)
 
 instance MonadLsp c m => MonadLsp c (ReaderT r m) where
   {-# SPECIALIZE instance MonadLsp config (ReaderT r (LspT config IO)) #-}

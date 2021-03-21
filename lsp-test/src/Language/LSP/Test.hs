@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE BangPatterns #-}
 
 {-|
 Module      : Language.LSP.Test
@@ -129,6 +130,8 @@ import System.Directory
 import System.FilePath
 import System.Process (ProcessHandle)
 import qualified System.FilePath.Glob as Glob
+import Data.IORef
+import Data.IxMap
 
 -- | Starts a new session.
 --
@@ -239,8 +242,8 @@ runSessionWithHandles' serverProc serverIn serverOut config' caps rootDir sessio
   listenServer serverOut context = do
     msgBytes <- getNextMessage serverOut
 
-    msg <- modifyMVar (requestMap context) $ \reqMap ->
-      pure $ decodeFromServerMsg reqMap msgBytes
+    msg <- atomicModifyIORef' (requestMap context) $ \reqMap ->
+      decodeFromServerMsg reqMap msgBytes
     writeChan (messageChan context) (ServerMessage msg)
 
     case msg of
@@ -303,7 +306,7 @@ getDocumentEdit doc = do
 -- @
 -- Note: will skip any messages in between the request and the response.
 request :: SClientMethod m -> MessageParams m -> Session (ResponseMessage m)
-request m = sendRequest m >=> skipManyTill anyMessage . responseForId m
+request m = sendRequest m >=> responseForId m
 
 -- | The same as 'sendRequest', but discard the response.
 request_ :: SClientMethod (m :: Method FromClient Request) -> MessageParams m -> Session ()
@@ -317,16 +320,19 @@ sendRequest
 sendRequest method params = do
   idn <- curReqId <$> get
   modify $ \c -> c { curReqId = idn+1 }
-  let id = IdInt idn
+  let !id = IdInt idn
 
-  let mess = RequestMessage "2.0" id method params
 
   -- Update the request map
   reqMap <- requestMap <$> ask
-  liftIO $ modifyMVar_ reqMap $
-    \r -> return $ fromJust $ updateRequestMap r id method
+  size <- liftIO $ atomicModifyIORef' reqMap $
+    \r -> (fromJust $ updateRequestMap r id method, Map.size $ getMap r)
 
-  ~() <- case splitClientMethod method of
+  when (size /= 0) $ liftIO $ putStrLn $ show ("********************", size)
+
+  let mess = RequestMessage "2.0" id method params
+
+  () <- case splitClientMethod method of
     IsClientReq -> sendMessage mess
     IsClientEither -> sendMessage $ ReqMess mess
 

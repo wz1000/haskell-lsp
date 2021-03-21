@@ -31,7 +31,6 @@ import Control.Monad.IO.Class
 import Control.Monad.Except
 import Control.Concurrent.STM
 import Control.Monad.Trans.Except
-import Control.Monad.Reader
 import Data.IxMap
 import System.Directory
 import System.Log.Logger
@@ -43,9 +42,9 @@ import System.Exit
 
 processMessage :: BSL.ByteString -> LspM config ()
 processMessage jsonStr = do
-  pendingResponsesVar <- LspT $ asks $ resPendingResponses . resState
+  pendingResponsesVar <- getsLspEnv $ resPendingResponses . resState
   join $ liftIO $ atomically $ fmap handleErrors $ runExceptT $ do
-      val <- except $ eitherDecode jsonStr
+      val <- except $ eitherDecode' jsonStr
       pending <- lift $ readTVar pendingResponsesVar
       msg <- except $ parseEither (parser pending) val
       lift $ case msg of
@@ -367,7 +366,7 @@ shutdownRequestHandler = \_req k -> do
 
 handleConfigChange :: Message WorkspaceDidChangeConfiguration -> LspM config ()
 handleConfigChange req = do
-  parseConfig <- LspT $ asks resParseConfig
+  parseConfig <- getsLspEnv resParseConfig
   res <- stateState resConfig $ \oldConfig -> case parseConfig oldConfig (req ^. LSP.params . LSP.settings) of
     Left err -> (Left err, oldConfig)
     Right !newConfig -> (Right (), newConfig)

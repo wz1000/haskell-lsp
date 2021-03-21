@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeInType #-}
+{-# LANGUAGE BangPatterns #-}
 module Language.LSP.Test.Decoding where
 
 import           Prelude                 hiding ( id )
@@ -83,22 +84,12 @@ getRequestMap = foldl' helper emptyIxMap
     _ -> acc
 
 decodeFromServerMsg :: RequestMap -> B.ByteString -> (RequestMap, FromServerMessage)
-decodeFromServerMsg reqMap bytes = unP $ fromJust $ parseMaybe p obj
-  where obj = fromJust $ decode bytes :: Value
+decodeFromServerMsg !reqMap bytes = unP $ fromJust $ parseMaybe p obj
+  where !obj = fromJust $ decode' bytes :: Value
         p = parseServerMessage $ \lid ->
-          let (mm, newMap) = pickFromIxMap lid reqMap
+          let (mm, !newMap) = pickFromIxMap lid reqMap
             in case mm of
               Nothing -> Nothing
-              Just m -> Just $ (m, Pair m (Const newMap))
-        unP (FromServerMess m msg) = (reqMap, FromServerMess m msg)
-        unP (FromServerRsp (Pair m (Const newMap)) msg) = (newMap, FromServerRsp m msg)
-        {-
-        WorkspaceWorkspaceFolders      -> error "ReqWorkspaceFolders not supported yet"
-        WorkspaceConfiguration         -> error "ReqWorkspaceConfiguration not supported yet"
-        CustomServerMethod _
-            | "id" `HM.member` obj && "method" `HM.member` obj -> ReqCustomServer $ fromJust $ decode bytes
-            | "id" `HM.member` obj -> RspCustomServer $ fromJust $ decode bytes
-            | otherwise -> NotCustomServer $ fromJust $ decode bytes
-
-      Error e -> error e
-      -}
+              Just !m -> Just $ (m, Pair m (Const newMap))
+        unP (FromServerMess !m !msg) = (reqMap, FromServerMess m msg)
+        unP (FromServerRsp (Pair !m (Const !newMap)) !msg) = (newMap, FromServerRsp m msg)

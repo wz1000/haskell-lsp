@@ -4,6 +4,8 @@ packages:
          ./lsp-test/
          ./lsp-test/example
          ./func-test/
+         ./conduit-parse/
+         ./parsec-3.1.14.0/
          ./bench/
 
 package lsp

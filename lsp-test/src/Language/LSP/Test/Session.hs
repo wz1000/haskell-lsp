@@ -47,8 +47,8 @@ import Control.Monad.Fail
 #endif
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import qualified Control.Monad.Trans.Reader as Reader (ask)
-import Control.Monad.Trans.State (StateT, runStateT)
-import qualified Control.Monad.Trans.State as State
+import Control.Monad.Trans.State.Strict (StateT, runStateT)
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Aeson
 import Data.Aeson.Encode.Pretty
@@ -138,7 +138,7 @@ data SessionContext = SessionContext
   , messageChan :: Chan SessionMessage -- ^ Where all messages come through
   -- Keep curTimeoutId in SessionContext, as its tied to messageChan
   , curTimeoutId :: IORef Int -- ^ The current timeout we are waiting on
-  , requestMap :: MVar RequestMap
+  , requestMap :: IORef RequestMap
   , initRsp :: MVar (ResponseMessage Initialize)
   , config :: SessionConfig
   , sessionCapabilities :: ClientCapabilities
@@ -187,10 +187,10 @@ class Monad m => HasState s m where
   put :: s -> m ()
 
   modify :: (s -> s) -> m ()
-  modify f = get >>= put . f
+  modify f = get >>= (($!) put . f)
 
   modifyM :: (HasState s m, Monad m) => (s -> m s) -> m ()
-  modifyM f = get >>= f >>= put
+  modifyM f = get >>= (f $!) >>= put
 
 instance HasState SessionState Session where
   get = Session (lift State.get)
@@ -213,14 +213,7 @@ instance (Monad m, (HasState s m)) => HasState s (ConduitParser a m)
 runSessionMonad :: SessionContext -> SessionState -> Session a -> IO (a, SessionState)
 runSessionMonad context state (Session session) = runReaderT (runStateT conduit state) context
   where
-    conduit = runConduit $ chanSource .| watchdog .| updateStateC .| runConduitParser (catchError session handler)
-
-    handler (Unexpected "ConduitParser.empty") = do
-      lastMsg <- fromJust . lastReceivedMessage <$> get
-      name <- getParserName
-      liftIO $ throw (UnexpectedMessage (T.unpack name) lastMsg)
-
-    handler e = throw e
+    conduit = runConduit $ chanSource .| watchdog .| updateStateC .| runConduitParser session
 
     chanSource = do
       msg <- liftIO $ readChan (messageChan context)
@@ -261,7 +254,7 @@ runSession' serverIn serverOut mServerProc serverHandler config caps rootDir exi
   hSetBinaryMode serverIn True
   hSetBinaryMode serverOut True
 
-  reqMap <- newMVar newRequestMap
+  reqMap <- newIORef newRequestMap
   messageChan <- newChan
   timeoutIdVar <- newIORef 0
   initRsp <- newEmptyMVar
@@ -429,6 +422,7 @@ updateState (FromServerMess SWorkspaceApplyEdit r) = do
                               in DidChangeTextDocumentParams (head params ^. textDocument) (List events)
 updateState _ = return ()
 
+{-# INLINE sendMessage #-}
 sendMessage :: (MonadIO m, HasReader SessionContext m, ToJSON a) => a -> m ()
 sendMessage msg = do
   h <- serverIn <$> ask
@@ -455,6 +449,7 @@ withTimeout duration f = do
 data LogMsgType = LogServer | LogClient
   deriving Eq
 
+{-# INLINE logMsg #-}
 -- | Logs the message if the config specified it
 logMsg :: (ToJSON a, MonadIO m, HasReader SessionContext m)
        => LogMsgType -> a -> m ()
